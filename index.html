@@ -1,114 +1,51 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AgriGuru App</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgriGuru | Grow with clarity</title>
   <style>
-    /* Fullscreen video background */
-    .video-bg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      z-index: -1;
-    }
-
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', sans-serif;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-
-    .container {
-      text-align: center;
-      width: 90%;
-      max-width: 400px;
-      padding: 20px;
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 20px;
-      box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
-      z-index: 1;
-    }
-
-    .logo {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
-    .logo img {
-      width: 40px;
-    }
-
-    h1 {
-      font-size: 2em;
-      color: #2e7d32;
-      margin: 0;
-    }
-
-    p {
-      color: #333;
-      font-size: 1em;
-      margin-bottom: 20px;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 15px;
-      margin: 10px 0;
-      font-size: 1.1em;
-      font-weight: bold;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-
-    .btn.chatbot {
-      background: #4caf50;
-    }
-
-    .btn.chatbot:hover {
-      background: #388e3c;
-    }
-
-    .btn.market {
-      background: #2196f3;
-    }
-
-    .btn.market:hover {
-      background: #1976d2;
-    }
+    :root { --forest:#123c2a; --leaf:#2f8a57; --cream:#f6f1e5; --gold:#efb544; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:#fff; font-family:Inter,Segoe UI,Arial,sans-serif; background:linear-gradient(118deg,rgba(8,39,27,.94),rgba(19,87,52,.78)), radial-gradient(circle at 84% 12%,rgba(239,181,68,.42),transparent 27%), linear-gradient(150deg,#285d3b,#97b862 52%,#1f593d); overflow-x:hidden; }
+    body::before,body::after { content:""; position:fixed; z-index:-1; border-radius:50%; border:1px solid rgba(255,255,255,.14); transform:rotate(-18deg); }
+    body::before { width:74vw; height:23vw; right:-19vw; bottom:-3vw; box-shadow:0 -34px 0 rgba(255,255,255,.05),0 -68px 0 rgba(255,255,255,.04),0 -102px 0 rgba(255,255,255,.03); }
+    body::after { width:62vw; height:18vw; left:-28vw; top:10vw; }
+    .page { width:min(1180px,92%); min-height:100vh; margin:auto; display:flex; flex-direction:column; }
+    nav { padding:28px 0; display:flex; align-items:center; justify-content:space-between; }
+    .brand { display:flex; align-items:center; gap:12px; font-size:1.25rem; font-weight:800; letter-spacing:.02em; }
+    .brand img { width:48px; height:48px; border-radius:14px; object-fit:cover; background:#fff; padding:4px; }
+    .tag { padding:8px 14px; border:1px solid rgba(255,255,255,.32); border-radius:99px; font-size:.82rem; color:#f9f3de; }
+    main { flex:1; display:grid; grid-template-columns:1.15fr .85fr; align-items:center; gap:56px; padding:42px 0 80px; }
+    .eyebrow { color:#f7ce76; letter-spacing:.15em; text-transform:uppercase; font-size:.76rem; font-weight:800; }
+    h1 { max-width:720px; margin:15px 0 20px; font-size:clamp(3rem,6vw,5.7rem); line-height:.98; letter-spacing:-.06em; }
+    .lead { max-width:590px; color:rgba(255,255,255,.8); font-size:1.12rem; line-height:1.65; }
+    .actions { display:flex; flex-wrap:wrap; gap:13px; margin-top:30px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; gap:10px; min-width:182px; padding:15px 22px; border-radius:14px; text-decoration:none; font-weight:800; transition:transform .2s,box-shadow .2s; }
+    .button:hover { transform:translateY(-3px); box-shadow:0 12px 26px rgba(0,0,0,.24); }
+    .primary { color:#143b28; background:#f7d27a; } .secondary { color:#fff; border:1px solid rgba(255,255,255,.36); background:rgba(255,255,255,.1); }
+    .panel { padding:26px; color:#173d2a; background:rgba(255,253,246,.93); border:1px solid rgba(255,255,255,.5); border-radius:28px; box-shadow:0 30px 70px rgba(3,26,16,.28); }
+    .panel h2 { margin:0; font-size:1.25rem; } .panel p { margin:8px 0 22px; color:#66756b; line-height:1.5; }
+    .insight { display:flex; gap:14px; padding:15px 0; border-top:1px solid #e3e6da; }
+    .icon { width:42px; height:42px; display:grid; place-items:center; flex:none; border-radius:12px; background:#e6f1dc; font-size:1.3rem; }
+    .insight strong { display:block; margin:2px 0 4px; } .insight span { color:#68776d; font-size:.88rem; }
+    footer { padding:0 0 25px; color:rgba(255,255,255,.62); font-size:.82rem; }
+    @media (max-width:760px) { main { grid-template-columns:1fr; gap:36px; padding-top:20px; } .panel { max-width:520px; } .tag { display:none; } }
   </style>
 </head>
 <body>
-
-  <!-- Fullscreen Video Background -->
-  <video class="video-bg" autoplay muted loop>
-    <source src="grass.mp4" type="video/mp4" />
-    Your browser does not support the video tag.
-  </video>
-
-  <div class="container">
-    <div class="logo">
-      <img src="./static/logo.jpg" alt="Logo" style="width: 80%"/>
-      <!-- <h1>AgriGuru</h1> -->
-    </div>
-    <p>Welcome to AgriGuru! Choose your next step:</p>
-    <button class="btn chatbot" onclick="location.href='chatbot'">Chatbot</button>
-    <button class="btn market" onclick="location.href='market'">Market</button>
+  <div class="page">
+    <nav><div class="brand"><img src="{{ url_for('static', filename='logo.jpg') }}" alt="AgriGuru logo"> AgriGuru</div><span class="tag">Tamil Nadu crop intelligence</span></nav>
+    <main>
+      <section>
+        <div class="eyebrow">Smarter decisions, season after season</div>
+        <h1>Grow with confidence.</h1>
+        <p class="lead">AgriGuru brings local soil information, weather signals and market potential together to help you choose the next right crop.</p>
+        <div class="actions"><a class="button primary" href="{{ url_for('chatbot') }}">Explore crop advice <span>→</span></a></div>
+      </section>
+      <aside class="panel"><h2>Your farm, made clearer</h2><p>Start with your location and get recommendations designed around your growing conditions.</p><div class="insight"><div class="icon">⌖</div><div><strong>Location-aware</strong><span>Regional soil and weather context</span></div></div><div class="insight"><div class="icon">◌</div><div><strong>Season-ready</strong><span>Recommendations updated for today</span></div></div><div class="insight"><div class="icon">↗</div><div><strong>Soil-aware</strong><span>Recommendations matched to district data</span></div></div></aside>
+    </main>
+    <footer>AgriGuru · Practical intelligence for every growing decision</footer>
   </div>
-
 </body>
 </html>

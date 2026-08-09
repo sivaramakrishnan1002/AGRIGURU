@@ -6,15 +6,6 @@
   <title>Customer Portal</title>
   <style>
 
-    .video-bg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      object-fit: cover;
-      z-index: -1;
-    }
     body {
       font-family: Arial, sans-serif;
       background-color: #eef6f2;
@@ -107,11 +98,6 @@
 </head>
 <body>
   
-   <video class="video-bg" autoplay muted loop>
-    <source src="grass.mp4" type="video/mp4" />
-    Your browser does not support the video tag.
-  </video>
-
 <header>
   <h1>Customer Portal</h1>
 </header>
@@ -195,7 +181,7 @@
       const data = await res.json();
       if (!data.success) return alert("❌ Failed to send OTP: " + (data.error || ""));
 
-      const otp = prompt(`✅ OTP sent to ${phone}. Enter it to continue:`);
+      const otp = prompt(`Demo OTP: ${data.development_otp || 'Check your SMS'}. Enter it to continue:`);
       if (!otp) return alert("OTP not entered.");
 
       const verifyRes = await fetch("/verify_otp", {

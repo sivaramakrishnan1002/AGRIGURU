@@ -1,4 +1,14 @@
 import os
+import sys
+
+# Avoid joblib's physical-core probe failing in restricted Windows shells.
+os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
+
+# Windows consoles commonly default to cp1252, which cannot print the emoji
+# and rupee characters used in the command-line report.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
@@ -618,7 +628,6 @@ def run_recommendation(lat, lon, district, date):
     ui.display_results(results)
 
 if __name__ == "__main__":
-    import sys
     if len(sys.argv) == 5:
         lat, lon, district, date = sys.argv[1:5]
         print(f"Input Details:\nLatitude: {lat}\nLongitude: {lon}\nDistrict: {district}\nDate: {date}\n")
