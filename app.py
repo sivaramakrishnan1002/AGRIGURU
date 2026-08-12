@@ -55,6 +55,7 @@ TALUKS = {
 recommendation_system = None
 geocoder = Nominatim(user_agent='agriguru-crop-recommendation/1.0', timeout=5)
 location_cache = {}
+coordinate_cache = {}
 
 
 def get_recommendation_system():
@@ -137,6 +138,21 @@ def reverse_geocode(latitude, longitude):
     location_cache[cache_key] = result
     return result
 
+
+def geocode_place(district, taluk='', village=''):
+    """Resolve user-entered Tamil Nadu place fields to coordinates."""
+    cache_key = (district, taluk, village)
+    if cache_key in coordinate_cache:
+        return coordinate_cache[cache_key]
+
+    parts = [part.strip() for part in (village, taluk, district, 'Tamil Nadu', 'India') if part and part.strip()]
+    location = geocoder.geocode(', '.join(parts), exactly_one=True, language='en')
+    if location is None:
+        raise ValueError('Location not found. Check the district, taluk, and village names, or enter coordinates manually.')
+    result = {'latitude': round(location.latitude, 6), 'longitude': round(location.longitude, 6)}
+    coordinate_cache[cache_key] = result
+    return result
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -161,6 +177,26 @@ def resolve_location():
     except (GeocoderTimedOut, GeocoderServiceError, OSError):
         # Geolocation itself remains useful even if the optional lookup service is unavailable.
         return jsonify({'district': '', 'taluk': '', 'village': '', 'warning': 'Location found, but place details are temporarily unavailable.'})
+
+
+@app.route('/resolve_coordinates', methods=['POST'])
+def resolve_coordinates():
+    data = request.get_json(silent=True) or {}
+    district = (data.get('district') or '').strip()
+    taluk = (data.get('taluk') or '').strip()
+    village = (data.get('village') or '').strip()
+    if district not in DISTRICTS:
+        return jsonify({'error': 'Select a district from the available list first.'}), 400
+    if taluk and taluk not in TALUKS[district]:
+        return jsonify({'error': 'Select a taluk from the available list.'}), 400
+    if not village and not taluk:
+        return jsonify({'error': 'Enter a village or select a taluk to find coordinates.'}), 400
+    try:
+        return jsonify(geocode_place(district, taluk, village))
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 404
+    except (GeocoderTimedOut, GeocoderServiceError, OSError):
+        return jsonify({'error': 'Place lookup is temporarily unavailable. Enter coordinates manually and try again later.'}), 503
 
 @app.route('/market')
 def market():
