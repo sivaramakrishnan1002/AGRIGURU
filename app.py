@@ -1,11 +1,14 @@
 from pathlib import Path
+from difflib import SequenceMatcher
 import secrets
 
 from flask import Flask, render_template, request, jsonify
+from geopy.exc import GeocoderServiceError, GeocoderTimedOut
+from geopy.geocoders import Nominatim
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
-import subprocess
-import sys
+
+from market_integrated import IntegratedRecommendationSystem
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -47,6 +50,93 @@ TALUKS = {
     'Kanyakumari': ['Nagercoil', 'Kalkulam', 'Vilavancode'], 'Mayiladuthurai': ['Mayiladuthurai', 'Sirkazhi', 'Kuthalam'],
 }
 
+# Keep the data and ML model in the Gunicorn worker instead of starting a new
+# Python process for every request. This also lets the weather cache be reused.
+recommendation_system = None
+geocoder = Nominatim(user_agent='agriguru-crop-recommendation/1.0', timeout=5)
+location_cache = {}
+
+
+def get_recommendation_system():
+    global recommendation_system
+    if recommendation_system is None:
+        recommendation_system = IntegratedRecommendationSystem()
+    return recommendation_system
+
+
+def format_web_recommendation(results):
+    """Create the stable text format consumed by chatbot.html."""
+    weather = results['weather']
+    temperature_key = next(key for key in weather if key.startswith('temperature'))
+    lines = [
+        '=== Final Recommendation Report ===',
+        f"Location: {results['coordinates']['latitude']}, {results['coordinates']['longitude']}",
+        f"District: {results['district']}",
+        f"Season: {weather['season']}",
+        '', 'Weather Conditions:',
+        f"- Temperature: {weather[temperature_key]}°C",
+        f"- Humidity: {weather['humidity (%)']}%",
+        f"- Rainfall: {weather['rainfall (mm)']}mm",
+        '', 'Soil Conditions:',
+        f"- Type: {results['soil']['type']}",
+        f"- pH: {results['soil']['pH']}",
+        f"- Nutrients (N-P-K): {results['soil']['N']}-{results['soil']['P']}-{results['soil']['K']}",
+        '', 'Top 3 Most Profitable Crops:',
+    ]
+    rupee = chr(0x20B9)
+    for rank, crop in enumerate(results['recommendations'], 1):
+        lines.append(
+            f"{rank} {crop['crop']} {crop['probability']:.2f}"
+            f" {rupee}{crop['current_price']:.2f} {rupee}{crop['future_price']:.2f}"
+            f" {rupee}{crop['profit']:.2f}"
+        )
+    return '\n'.join(lines)
+
+
+def normalize_place_name(value):
+    """Normalize location names before comparing government-area labels."""
+    return ''.join(char for char in (value or '').lower() if char.isalnum())
+
+
+def best_match(value, choices):
+    """Return a confident match from the app's supported location list."""
+    candidate = normalize_place_name(value)
+    if not candidate:
+        return None
+    for choice in choices:
+        normalized = normalize_place_name(choice)
+        if candidate == normalized or candidate.startswith(normalized) or normalized.startswith(candidate):
+            return choice
+    scored = [(SequenceMatcher(None, candidate, normalize_place_name(choice)).ratio(), choice) for choice in choices]
+    score, choice = max(scored, default=(0, None))
+    return choice if score >= 0.82 else None
+
+
+def reverse_geocode(latitude, longitude):
+    """Resolve a coordinate to supported district/taluk fields when possible."""
+    cache_key = (round(latitude, 4), round(longitude, 4))
+    if cache_key in location_cache:
+        return location_cache[cache_key]
+
+    location = geocoder.reverse((latitude, longitude), exactly_one=True, language='en')
+    address = getattr(location, 'raw', {}).get('address', {}) if location else {}
+    district = best_match(
+        address.get('state_district') or address.get('district') or address.get('county'),
+        DISTRICTS,
+    )
+    area_values = [
+        address.get(key, '')
+        for key in ('taluk', 'city_district', 'county', 'municipality', 'city', 'town', 'village', 'suburb')
+    ]
+    taluk = next(
+        (match for value in area_values if (match := best_match(value, TALUKS.get(district, [])))),
+        None,
+    )
+    village = next((address.get(key) for key in ('village', 'hamlet', 'suburb', 'neighbourhood') if address.get(key)), '')
+    result = {'district': district or '', 'taluk': taluk or '', 'village': village or ''}
+    location_cache[cache_key] = result
+    return result
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -54,6 +144,23 @@ def index():
 @app.route('/chatbot')
 def chatbot():
     return render_template('chatbot.html', districts=DISTRICTS, taluks=TALUKS)
+
+
+@app.route('/resolve_location', methods=['POST'])
+def resolve_location():
+    data = request.get_json(silent=True) or {}
+    try:
+        latitude = float(data.get('latitude'))
+        longitude = float(data.get('longitude'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Enter valid latitude and longitude values.'}), 400
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+        return jsonify({'error': 'Latitude or longitude is outside its valid range.'}), 400
+    try:
+        return jsonify(reverse_geocode(latitude, longitude))
+    except (GeocoderTimedOut, GeocoderServiceError, OSError):
+        # Geolocation itself remains useful even if the optional lookup service is unavailable.
+        return jsonify({'district': '', 'taluk': '', 'village': '', 'warning': 'Location found, but place details are temporarily unavailable.'})
 
 @app.route('/market')
 def market():
@@ -136,10 +243,12 @@ def get_recommendation():
     current_date = datetime.now().strftime('%Y-%m-%d')
 
     try:
-        result = subprocess.check_output([
-            sys.executable, str(BASE_DIR / 'market_integrated.py'),
-            str(latitude), str(longitude), str(district), str(current_date)
-        ], text=True, encoding='utf-8', stderr=subprocess.STDOUT, timeout=90)
+        results = get_recommendation_system().get_recommendations(
+            latitude, longitude, district, current_date
+        )
+        if results['status'] != 'success':
+            raise RuntimeError(results['message'])
+        result = format_web_recommendation(results)
         print("Recommendation generated successfully.")
     except Exception as e:
         print("Error running market_integrated.py:", e)

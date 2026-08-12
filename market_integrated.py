@@ -146,7 +146,10 @@ class WeatherService:
             f"&timezone=auto"
         )
         try:
-            response = requests.get(url, timeout=10)
+            # A recommendation should remain responsive even when a free host
+            # cannot reach the weather provider. The local fallback is used
+            # after this short, bounded attempt.
+            response = requests.get(url, timeout=5)
             response.raise_for_status()
             data = response.json()['daily']
             
@@ -216,7 +219,7 @@ class WeatherService:
             "format": "JSON"
         }
         try:
-            response = requests.get(url, params=params, timeout=15)
+            response = requests.get(url, params=params, timeout=5)
             response.raise_for_status()
             data = response.json()['properties']['parameter']
             df = pd.DataFrame({
@@ -581,7 +584,47 @@ class UserInterface:
     
     @staticmethod
     def display_results(results: Dict):
-        """Display recommendation results"""
+        """Display recommendation results."""
+        print(format_recommendation_report(results))
+
+
+def format_recommendation_report(results: Dict) -> str:
+    """Return the report consumed by the web interface and CLI."""
+    if results['status'] == 'error':
+        available = ", ".join(results['available_districts'])
+        return f"\nError: {results['message']}\n\nAvailable districts:\n{available}"
+
+    lines = [
+        "", "=== Final Recommendation Report ===",
+        f"Location: {results['coordinates']['latitude']}, {results['coordinates']['longitude']}",
+        f"District: {results['district']}",
+        f"Season: {results['weather']['season']}",
+        "", "Weather Conditions:",
+        f"- Temperature: {next(value for key, value in results['weather'].items() if key.startswith('temperature'))}°C",
+        f"- Humidity: {results['weather']['humidity (%)']}%",
+        f"- Rainfall: {results['weather']['rainfall (mm)']}mm",
+        f"- Source: {results['weather'].get('source', 'unknown')}",
+        "", "Soil Conditions:",
+        f"- Type: {results['soil']['type']}",
+        f"- pH: {results['soil']['pH']}",
+        f"- Nutrients (N-P-K): {results['soil']['N']}-{results['soil']['P']}-{results['soil']['K']}",
+        "", "Top 3 Most Profitable Crops:", "=" * 120,
+        f"{'Rank':<5}{'Crop':<25}{'Suitability':<12}{'Current Price':<15}{'Future Price':<15}{'Profit':<12}{'ROI%':<10}{'Growth Days':<12}",
+        "-" * 120,
+    ]
+    for rank, crop in enumerate(results['recommendations'], 1):
+        lines.append(
+            f"{rank:<5}{crop['crop']:<25}{crop['probability']:<12.2f}₹{crop['current_price']:<14.2f}₹{crop['future_price']:<14.2f}₹{crop['profit']:<11.2f}{crop['roi']:<10.1f}%{crop['growth_days']:>12}d"
+        )
+    lines.extend(["=" * 120, "Note: Suitability (0-1) measures agronomic compatibility", "      Recommendations combine suitability (60%) and profit potential (40%)"])
+    return "\n".join(lines)
+
+
+class _UnusedLegacyUserInterface:
+    @staticmethod
+    def get_user_input() -> Dict:
+        """Get and validate user input"""
+        return None
         if results['status'] == 'error':
             print(f"\n❌ Error: {results['message']}")
             print("\nAvailable districts:")
